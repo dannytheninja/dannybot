@@ -1,0 +1,13 @@
+<?php
+
+$config = array(
+	'server' => 'irc.freenode.net'
+	, 'port' => 6697
+	, 'ssl' => true
+	, 'identity' => array(
+		'nick' => 'phbot2'
+		, 'user' => 'phbot2'
+		, 'gecos' => 'The person who configured me is a n00b who does not read the README'
+		)
+	);
+
