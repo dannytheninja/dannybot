@@ -22,25 +22,53 @@
 namespace DannyTheNinja\IRC\Plugin;
 use DannyTheNinja\IRC;
 
+/**
+ * Foundation for all IRC plugins.
+ */
+
 abstract class AbstractPlugin
 {
+	/** @var DannyTheNinja\IRC\Bot */
 	protected $bot;
+	
+	/** @var DannyTheNinja\IRC\Client */
 	private $client;
+	
+	/** @var array */
 	private $hookUUIDs = [];
+	
+	/**
+	 * Load the plugin. Your method should make any necessary calls to the
+	 * "bind" method here.
+	 * 
+	 * @abstract
+	 */
 	
 	abstract protected function loadPlugin();
 	
+	/**
+	 * Called from Bot->loadPlugins().
+	 * 
+	 * @final
+	 */
+	
 	final public function load(IRC\Bot $bot, IRC\Client $client)
 	{
-		$client->info(
-			"Plugin loaded: " . get_class($this)
-		);
-		
 		$this->bot = $bot;
 		$this->client = $client;
 		$this->loadPlugin();
 		$this->client = null;
+		
+		$client->info(
+			"Plugin loaded: " . get_class($this)
+		);
 	}
+	
+	/**
+	 * Unload this plugin.
+	 *
+	 * @final
+	 */
 	
 	final public function unload(IRC\Client $client)
 	{
@@ -49,6 +77,20 @@ abstract class AbstractPlugin
 		}
 		$this->hookUUIDs = [];
 	}
+	
+	/**
+	 * Bind to an IRC event.
+	 *
+	 * @param mixed
+	 *   IRC opcode. Can be a textual event (i.e. "PING", "PRIVMSG", etc.) or
+	 *   one of the numeric opcodes from DannyTheNinja\IRC\Opcode, or an array
+	 *   of multiple of the above.
+	 * @param callback
+	 *   Function to call when those events happen in IRC. It will be provided
+	 *   2 parameters: the IRC\Client instance, and an array with details about
+	 *   the message.
+	 * @final
+	 */
 	
 	final protected function bind($opcode, $callback)
 	{
