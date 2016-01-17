@@ -21,6 +21,25 @@
 
 namespace DannyTheNinja\IRC\Plugin;
 
+use DannyTheNinja\IRC;
+
 class MooSex extends AbstractPlugin
 {
+	protected function loadPlugin()
+	{
+		$this->bind('PRIVMSG', function($irc, $msg)
+			{
+				static $sex = 'male';
+				
+				if ( $msg['extra']{0} !== '#' )
+					return;
+				
+				if ( $msg['body'] === '!sexchange' ) {
+					$sex = $sex == 'male' ? 'female' : 'male';
+					$irc->privmsg($msg['extra'], "Moo's sex is now <b>$sex</b>.");
+					
+					throw new IRC\Signal\BreakHooks;
+				}
+			});
+	}
 }

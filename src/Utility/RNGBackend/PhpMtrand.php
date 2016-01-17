@@ -18,12 +18,20 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
+ 
+namespace DannyTheNinja\Utility\RNGBackend;
 
-namespace DannyTheNinja\IRC\Plugin;
+use DannyTheNinja\Utility\RNGInterface;
 
-class CurrencyConverter extends AbstractPlugin
+class PhpMtrand implements RNGInterface
 {
-	protected function loadPlugin()
+	public function __construct()
 	{
+		// nothing yet
+	}
+	
+	public function getByte()
+	{
+		return chr(mt_rand(0, 255));
 	}
 }

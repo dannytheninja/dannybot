@@ -18,12 +18,31 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
+ 
+namespace DannyTheNinja\Utility\RNGBackend;
 
-namespace DannyTheNinja\IRC\Plugin;
+use DannyTheNinja\Utility\RNGInterface;
 
-class CurrencyConverter extends AbstractPlugin
+class CharacterDevice implements RNGInterface
 {
-	protected function loadPlugin()
+	private $fp;
+	
+	public function __construct($path)
 	{
+		$this->fp = fopen($path, 'r');
+	}
+	
+	public function __destruct()
+	{
+		fclose($this->fp);
+	}
+	
+	public function getByte()
+	{
+		$buf = '';
+		while ( strlen($buf) < 1 ) {
+			$buf .= fread($this->fp, 1);
+		}
+		return $buf;
 	}
 }

@@ -24,8 +24,34 @@ use DannyTheNinja\IRC;
 
 abstract class AbstractPlugin
 {
-	public function load(IRC\Client $client)
+	protected $bot;
+	private $client;
+	private $hookUUIDs = [];
+	
+	abstract protected function loadPlugin();
+	
+	final public function load(IRC\Bot $bot, IRC\Client $client)
 	{
+		$client->info(
+			"Plugin loaded: " . get_class($this)
+		);
 		
+		$this->bot = $bot;
+		$this->client = $client;
+		$this->loadPlugin();
+		$this->client = null;
+	}
+	
+	final public function unload(IRC\Client $client)
+	{
+		foreach ( $this->hookUUIDs as $uuid ) {
+			$client->unbind($uuid);
+		}
+		$this->hookUUIDs = [];
+	}
+	
+	final protected function bind($opcode, $callback)
+	{
+		$this->hookUUIDs[] = $this->client->bind($opcode, $callback);
 	}
 }

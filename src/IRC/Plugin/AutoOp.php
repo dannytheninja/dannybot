@@ -23,4 +23,23 @@ namespace DannyTheNinja\IRC\Plugin;
 
 class AutoOp extends AbstractPlugin
 {
+	protected function loadPlugin()
+	{
+		$this->bind('JOIN', function($irc, $msg)
+			{
+				// if self, op through chanserv...
+				if ( $msg['identity']['nick'] === $irc->identity['nick'] ) {
+					$irc->privmsg('ChanServ', "OP {$msg['body']} {$irc->identity['nick']}");
+					return;
+				}
+				
+				// else, op if permissions dictate
+				$this->bot->checkPermissionsAndNickserv(
+					$msg['identity']['nick'],
+					'autoop',
+					function($irc) use ($msg) {
+						$irc->mode($msg['body'], '+o', $msg['identity']['nick']);
+					});
+			});
+	}
 }

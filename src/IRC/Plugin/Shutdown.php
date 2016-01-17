@@ -23,4 +23,7 @@ namespace DannyTheNinja\IRC\Plugin;
 
 class Shutdown extends AbstractPlugin
 {
+	protected function loadPlugin()
+	{
+	}
 }

@@ -21,6 +21,8 @@
 
 namespace DannyTheNinja\IRC;
 
+use DannyTheNinja\Utility\UUID;
+
 /**
  * Generic IRC client library.
  */
@@ -480,21 +482,28 @@ class Client
 	/**
 	 * Bind to an opcode. When a message with this opcode arrives, your function will be called.
 	 * Parameters to the callback are the IRCClient object and the parsed message.
-	 * @param string|array opcode. If it's a numeric code, use an IRCOpcode constant. If this is an array of
-	 * 	opcodes, the same function will be called whichever opcode is used. Throwing an IRCUnhookSignal from
-	 * 	your callback will cause the entire hook to be removed.
-	 * @param callback Function that will be called.
+	 * @param mixed
+	 *   Opcode - string or array of strings. If it's a numeric code, use an
+	 *   Opcode constant. If this is an array of opcodes, the same function will
+	 *   be called whichever opcode is used. Throwing IRC\Signal\Unhook from
+	 *   your callback will cause the entire hook to be removed.
+	 * @param callback
+	 *   Function that will be called.
+	 * @return string
+	 *   UUID identifying this bound hook. Calling unbind() later will remove
+	 *   the hook.
 	 */
 	
 	public function bind($opcode, $function)
 	{
+		$uuid = (new UUID)->asString();
 		if ( is_array($opcode) ) {
 			// composite hook - bound to multiple opcodes
 			if ( !isset($this->hooks['composite']) ) {
 				$this->hooks['composite'] = array();
 			}
 			
-			$this->hooks['composite'][] = [
+			$this->hooks['composite'][$uuid] = [
 				'opcodes' => $opcode,
 				'function' => $function
 			];
@@ -505,8 +514,34 @@ class Client
 				$this->hooks[$opcode] = [];
 			}
 			
-			$this->hooks[$opcode][] = $function;
+			$this->hooks[$opcode][$uuid] = $function;
 		}
+		
+		$this->info("Hook bound: $uuid to opcodes " . json_encode($opcode));
+		
+		return $uuid;
+	}
+	
+	/**
+	 * Unbind a previously bound hook.
+	 *
+	 * @param string
+	 *   UUID
+	 */
+	
+	public function unbind($uuid)
+	{
+		foreach ( $this->hooks as $opcode => $hooks ) {
+			foreach ( $hooks as $hook_uuid => $callback ) {
+				if ( $hook_uuid === $uuid ) {
+					unset($hooks[$hook_uuid]);
+					return;
+				}
+			}
+		}
+		throw new \RuntimeException(
+			"There is no bound hook with the UUID \"$uuid\""
+		);
 	}
 	
 	/**

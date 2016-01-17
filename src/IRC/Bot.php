@@ -21,6 +21,10 @@
  
 namespace DannyTheNinja\IRC;
 
+/**
+ * IRC bot
+ */
+
 class Bot
 {
 	/**
@@ -129,7 +133,7 @@ class Bot
 	private function loadPlugins()
 	{
 		foreach ( $this->config->plugins as $plugin ) {
-			$plugin->load($this->client);
+			$plugin->load($this, $this->client);
 		}
 	}
 	

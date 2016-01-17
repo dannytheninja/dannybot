@@ -21,6 +21,50 @@
 
 namespace DannyTheNinja\IRC\Plugin;
 
+use DannyTheNinja\IRC;
+
 class Debug extends AbstractPlugin
 {
+	protected function loadPlugin()
+	{
+		// debug tools! :D
+		$this->bind('PRIVMSG', function($irc, $msg)
+			{
+				$args = preg_split('/\s+/', $msg['body']);
+				list($cmd) = $args;
+				switch($cmd)
+				{
+					case 'NAMES':
+						if ( isset($irc->joined_channels[$args[1]]) && isset($irc->joined_channels[$args[1]]['names']) ) {
+							$irc->privmsg($msg['identity']['nick'], implode(' ', $irc->joined_channels[$args[1]]['names']));
+						}
+						else {
+							$irc->privmsg($msg['identity']['nick'], "Not joined to {$args[1]}.");
+						}
+						throw new IRC\Signal\BreakHooks;
+						break;
+					case 'WHOIS':
+						$irc->whois(
+							$args[1],
+							function($whois) use ($irc, $msg) {
+								$irc->info(print_r($whois, true));
+							});
+						throw new IRC\Signal\BreakHooks;
+						break;
+					case 'QUOTE':
+						array_shift($args);
+						$quote = implode(' ', $args);
+						
+						$this->bot->checkPermissionsAndNickserv(
+							$msg['identity']['nick'],
+							'quote', 
+							function($irc) use ($quote) {
+								$irc->quote("$quote");
+							});
+						
+						throw new IRC\Signal\BreakHooks;
+						break;
+				}
+			});
+	}
 }
