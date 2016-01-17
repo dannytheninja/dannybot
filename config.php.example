@@ -1,13 +1,19 @@
 <?php
 
-$config = array(
-	'server' => 'irc.freenode.net'
-	, 'port' => 6697
-	, 'ssl' => true
-	, 'identity' => array(
-		'nick' => 'phbot2'
-		, 'user' => 'phbot2'
-		, 'gecos' => 'The person who configured me is a n00b who does not read the README'
-		)
-	);
+// 
+// Example bot configuration.
+//
 
+use DannyTheNinja\IRC\Bot\Config;
+use DannyTheNinja\IRC\Plugin;
+
+$config = new Config;
+
+$config->setServer('irc.freenode.net', 6697, true, [ 'peer_name' => 'irc.freenode.net' ]);
+$config->setIdentity('phbot2', 'phbot2', 'The person who configured me is a n00b who does not read the README');
+$config->addChannel('#example');
+$config->addPermission('some_nick', ['ALL']);
+$config->addPlugin(new Plugin\Shutdown);
+$config->addPlugin(new Plugin\Debug);
+
+return $config;

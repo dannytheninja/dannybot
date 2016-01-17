@@ -1,0 +1,17 @@
+{
+    "name": "dannytheninja/dannybot",
+    "description": "IRC bot",
+    "license": "GPLv2+",
+    "authors": [
+        {
+            "name": "DannyTheNinja",
+            "email": "danny@paddedninja.net"
+        }
+    ],
+    "require": {},
+	"autoload": {
+		"psr-4": {
+			"DannyTheNinja\\": "src/"
+		}
+	}
+}

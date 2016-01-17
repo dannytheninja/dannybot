@@ -1,6 +1,31 @@
 <?php
 
-class IRCClient
+/**
+ * dannybot - an IRC logging, ban management and stats bot
+ * Copyright (C) 2016 DannyTheNinja <danny@paddedninja.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+namespace DannyTheNinja\IRC;
+
+/**
+ * Generic IRC client library.
+ */
+
+class Client
 {
 	private $socket;
 	private $hooks = array();
@@ -13,7 +38,7 @@ class IRCClient
 	protected $whois_cache = array();
 	
 	// Regular expression fragments, used to ease readability of message parser code
-	const RE_FRAG_HOSTNAME = '(?:(?:[a-z0-9-]+\.)*(?:[a-z0-9-]+)|(?:[0-9a-f:]+))';
+	const RE_FRAG_HOSTNAME = '(?:(?:[a-z0-9-]+\.)*(?:[a-z0-9-]+)|(?:[0-9a-z:]+))';
 	const RE_FRAG_NICK = '[\w\|_-]+';
 	const RE_FRAG_USERNAME = '~?[\w_-]+';
 	
@@ -36,7 +61,7 @@ class IRCClient
 	protected function write($msg)
 	{
 		if ( strlen($msg) > 1022 )
-			throw new IRCClientException("Not permitted to write messages longer than 1024 bytes");
+			throw new ClientException("Not permitted to write messages longer than 1024 bytes");
 		
 		echo "\x1B[0;34;1m->\x1B[0m $msg\n";
 		while ( strlen($msg) )
@@ -63,16 +88,23 @@ class IRCClient
 	 * @param int Port number
 	 * @param array Identity. Should contain keys "nick", "username" and "gecos".
 	 * @param bool If true, SSL will be used.
+	 * @param array SSL context options
 	 */
 	
-	public function connect($host, $port, $identity, $ssl = false)
+	public function connect($host, $port, $identity, $ssl = false, $ssl_options = array())
 	{
-		if ( $ssl )
-			$host = "ssl://$host";
-		
-		$this->socket = fsockopen($host, $port);
+		if ( $ssl ) {
+			$sslctx = stream_context_create(array(
+					'ssl' => $ssl_options
+				));
+			$host = "tls://$host";
+			$this->socket = stream_socket_client("$host:$port", $errno, $errstr, ini_get('default_socket_timeout'), STREAM_CLIENT_CONNECT, $sslctx);
+		}
+		else {
+			$this->socket = fsockopen($host, $port);
+		}
 		if ( !$this->socket )
-			throw new IRCClientException("Failed to open socket");
+			throw new ClientException("Failed to open socket");
 		
 		$this->write("NICK {$identity['nick']}");
 		$this->write("USER {$identity['user']} 0 * :{$identity['gecos']}");
@@ -93,7 +125,7 @@ class IRCClient
 		// be good when killed
 		$this->bind('KILL', function($irc, $msg)
 			{
-				throw new IRCQuitSignal("Bot was killed :(");
+				throw new Signal\Quit("Bot was killed :(");
 			});
 		
 		// channel join handler
@@ -108,16 +140,16 @@ class IRCClient
 					$irc->joined_channels[$channel] = array('names' => array());
 					
 					// set a composite hook for the NAMES list
-					$irc->bind(array(IRCOpcode::OP_NAMES_LIST, IRCOpcode::OP_NAMES_END), function($irc, $msg) use ($channel)
+					$irc->bind(array(Opcode::OP_NAMES_LIST, Opcode::OP_NAMES_END), function($irc, $msg) use ($channel)
 						{
 							// verify that this line pertains to this channel
 							$mchannel = preg_replace("/^{$this->identity['nick']} (= )?/", '', $msg['extra']);
 							if ( $mchannel !== $channel )
 								return;
 							
-							if ( $msg['opcode'] === IRCOpcode::OP_NAMES_END )
+							if ( $msg['opcode'] === Opcode::OP_NAMES_END )
 							{
-								throw new IRCUnhookSignal();
+								throw new Signal\Unhook();
 							}
 							
 							foreach ( preg_split('/\s+/', $msg['body']) as $nick )
@@ -176,6 +208,25 @@ class IRCClient
 				}
 			});
 		
+		// quit handler - for when a user quits IRC
+		$this->bind('QUIT', function($irc, $msg)
+			{
+				foreach ( $irc->joined_channels as $channame => $channel )
+				{
+					if ( in_array($msg['identity']['nick'], $channel['names']) )
+					{
+						foreach ( $channel['names'] as $i => $name )
+						{
+							if ( $msg['identity']['nick'] === $name )
+							{
+								$irc->info("$name has quit IRC, removing them from $channame");
+								unset($channel['names'][$i]);
+							}
+						}
+					}
+				}
+			});
+		
 		// nick changes
 		$this->bind('NICK', function($irc, $msg)
 			{
@@ -213,7 +264,7 @@ class IRCClient
 	
 	/**
 	 * Joins a channel. This will also set appropriate hooks to gather information about the channel, and fill $irc->joined_channels asynchronously.
-	 * If you want to be notified when the channel finishes being joined, bind to IRCOpcode::OP_NAMES_END.
+	 * If you want to be notified when the channel finishes being joined, bind to Opcode::OP_NAMES_END.
 	 * @param string Channel name
 	 */
 	
@@ -247,7 +298,7 @@ class IRCClient
 	public function privmsg($target, $msg)
 	{
 		if ( strstr($msg, "\r") )
-			throw new IRCClientException("Carriage returns are not permitted in private messages");
+			throw new ClientException("Carriage returns are not permitted in private messages");
 		
 		foreach ( explode("\n", trim($msg)) as $line )
 		{
@@ -283,10 +334,14 @@ class IRCClient
 					}
 				}
 			}
-			catch ( IRCQuitSignal $iqs )
+			catch ( Signal\Quit $iqs )
 			{
 				$this->write("QUIT :{$iqs->getQuitMessage()}");
 				break;
+			}
+			catch ( Signal\BreakLoop $ibls )
+			{
+				return;
 			}
 		}
 		fclose($this->socket);
@@ -312,14 +367,14 @@ class IRCClient
 				{
 					call_user_func($func, $this, $msg);
 				}
-				catch ( IRCUnhookSignal $ius )
+				catch ( Signal\Unhook $ius )
 				{
 					// "IRCUnhookSignal" will cause the hook to be removed. The concept of temporary hooks
 					// allows the introduction of polling loops that grab a finite amount of information, then
 					// are finished.
 					unset($this->hooks[$opcode][$i]);
 				}
-				catch ( IRCBreakHooks $ibh )
+				catch ( Signal\BreakHooks $ibh )
 				{
 					// "IRCBreakHooks" will cause all further hooks for this event to stop being processed. This
 					// should only be used in cases where you are, for example, handling user input and responding
@@ -345,11 +400,11 @@ class IRCClient
 					{
 						call_user_func($hook['function'], $this, $msg);
 					}
-					catch ( IRCUnhookSignal $ius )
+					catch ( Signal\Unhook $ius )
 					{
 						unset($this->hooks['composite'][$i]);
 					}
-					catch ( IRCBreakHooks $ibh )
+					catch ( Signal\BreakHooks $ibh )
 					{
 						break;
 					}
@@ -500,17 +555,17 @@ class IRCClient
 		$this->whois_cache[$nick] = array();
 		
 		$this->bind(array(
-				IRCOpcode::OP_WHOIS_IDENTITY
-				, IRCOpcode::OP_WHOIS_CHANNELS
-				, IRCOpcode::OP_WHOIS_SERVER
-				, IRCOpcode::OP_WHOIS_SERVICES_IDENTITY
-				, IRCOpcode::OP_WHOIS_END
+				Opcode::OP_WHOIS_IDENTITY
+				, Opcode::OP_WHOIS_CHANNELS
+				, Opcode::OP_WHOIS_SERVER
+				, Opcode::OP_WHOIS_SERVICES_IDENTITY
+				, Opcode::OP_WHOIS_END
 			),
 			function($irc, $msg) use ($callback, $nick)
 			{
 				switch($msg['opcode'])
 				{
-					case IRCOpcode::OP_WHOIS_IDENTITY:
+					case Opcode::OP_WHOIS_IDENTITY:
 						list(,$snick,$user,$hostname) = preg_split('/\s+/', $msg['extra']);
 						$gecos = $msg['body'];
 						$irc->whois_cache[$nick]['identity'] = array(
@@ -521,29 +576,29 @@ class IRCClient
 							);
 						
 						break;
-					case IRCOpcode::OP_WHOIS_CHANNELS:
+					case Opcode::OP_WHOIS_CHANNELS:
 						foreach ( preg_split('/\s+/', $msg['body']) as $channel )
 						{
 							$irc->whois_cache[$nick]['channels'][] = $channel;
 						}
 						break;
-					case IRCOpcode::OP_WHOIS_SERVER:
+					case Opcode::OP_WHOIS_SERVER:
 						list(,,$server) = preg_split('/\s+/', $msg['extra']);
 						$irc->whois_cache[$nick]['server'] = array(
 								'hostname' => $server
 								, 'location' => $msg['body']
 							);
 						break;
-					case IRCOpcode::OP_WHOIS_SERVICES_IDENTITY:
+					case Opcode::OP_WHOIS_SERVICES_IDENTITY:
 						list(,,$idnick) = preg_split('/\s+/', $msg['extra']);
 						$irc->whois_cache[$nick]['services_identity'] = array(
 								'idnick' => $idnick
 							);
 						break;
-					case IRCOpcode::OP_WHOIS_END:
+					case Opcode::OP_WHOIS_END:
 						$irc->whois_cache[$nick]['timestamp'] = time();
 						call_user_func($callback, $irc->whois_cache[$nick]);
-						throw new IRCUnhookSignal();
+						throw new Signal\Unhook();
 						break;
 				}
 			});
@@ -598,7 +653,6 @@ class IRCClient
 	public function quote($line)
 	{
 		$this->write($line);
-		throw new IRCIKnowThisIsDangerousException;
 	}
 	
 	/**
@@ -611,6 +665,16 @@ class IRCClient
 	public function mode($object, $mode, $extra = '')
 	{
 		$this->write("MODE $object $mode :$extra");
+	}
+	
+	/**
+	 * Set mode on current nick
+	 * @param string mode
+	 */
+	
+	public function umode($mode)
+	{
+		$this->write("MODE {$this->identity['nick']} $mode");
 	}
 	
 	/**
@@ -630,89 +694,5 @@ class IRCClient
 			fclose($this->socket);
 			$this->socket = false;
 		}
-	}
-}
-
-/**
- * Class containing opcodes for various received IRC messages. Please use these.
- */
-
-class IRCOpcode
-{
-	const OP_WELCOME = '001';
-	const OP_NAMES_LIST = '353';
-	const OP_NAMES_END = '366';
-	
-	// whois
-	const OP_WHOIS_IDENTITY = '311';
-	const OP_WHOIS_CHANNELS = '319';
-	const OP_WHOIS_SERVER = '312';
-	const OP_WHOIS_SERVICES_IDENTITY = '330';
-	const OP_WHOIS_END = '318';
-}
-
-/**
- * Exception thrown when you do something bad to an IRCClient method.
- */
-
-class IRCClientException extends Exception
-{
-}
-
-/**
- * Throw this from a hook to cause the bot to shut down.
- */
-
-class IRCQuitSignal extends Exception
-{
-	private $quitMessage;
-	
-	/**
-	 * Retreieve the quit message.
-	 * @return string
-	 */
-	
-	public function getQuitMessage()
-	{
-		return $this->quitMessage;
-	}
-	
-	/**
-	 * Constructor.
-	 * @param string Quit message - required
-	 */
-	
-	public function __construct($quitMessage)
-	{
-		$this->quitMessage = $quitMessage;
-	}
-}
-
-/**
- * Throw this from a hook to destroy that hook
- */
-
-class IRCUnhookSignal extends Exception
-{
-	public function __construct()
-	{
-	}
-}
-
-/**
- * Throw this from a hook to stop hook processing (the hook is not destroyed and will be called the next time the same opcode comes in)
- */
-
-class IRCBreakHooks extends Exception
-{
-	public function __construct()
-	{
-	}
-}
-
-class IRCIKnowThisIsDangerousException extends Exception
-{
-	public function __construct()
-	{
 	}
 }
