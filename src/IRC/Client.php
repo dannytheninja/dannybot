@@ -370,7 +370,6 @@ class Client
 					break;
 				}
 			}
-			$this->hooks[$opcode] = array_values($this->hooks[$opcode]);
 		}
 		
 		// Run all composite hooks (hooks bound to more than one opcode)

@@ -133,6 +133,7 @@ class Bot
 	private function loadPlugins()
 	{
 		foreach ( $this->config->plugins as $plugin ) {
+			$plugin->unload($this->client);
 			$plugin->load($this, $this->client);
 		}
 	}
