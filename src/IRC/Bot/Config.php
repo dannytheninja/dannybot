@@ -50,6 +50,9 @@ class Config
 	/** @var string */
 	private $gecos;
 	
+	/** @var string */
+	private $nickservPassword = null;
+	
 	/** @var array */
 	private $channels = [];
 	
@@ -92,11 +95,12 @@ class Config
 	 *   gecos string
 	 */
 	
-	public function setIdentity($nick, $user, $gecos)
+	public function setIdentity($nick, $user, $gecos, $nickservpw = null)
 	{
 		$this->nick = $nick;
 		$this->username = $user;
 		$this->gecos = $gecos;
+		$this->nickservPassword = $nickservpw;
 	}
 	
 	/**

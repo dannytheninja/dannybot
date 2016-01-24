@@ -31,6 +31,8 @@ class Opcode
 	const OP_NAMES_LIST = '353';
 	const OP_NAMES_END = '366';
 	const OP_HOSTNAME_CHANGED = '396';
+	const OP_MOTD_END = '376';
+	const OP_NICK_IN_USE = '433';
 	
 	// whois
 	const OP_WHOIS_IDENTITY = '311';

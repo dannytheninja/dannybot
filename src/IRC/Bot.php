@@ -77,6 +77,7 @@ class Bot
 		$this->loadPlugins();
 		$this->joinChannels();
 		$this->setupRehash();
+		$this->setupNickservAuthentication();
 		
 		$this->client->event_loop();
 	}
@@ -207,6 +208,48 @@ class Bot
 				
 				throw new Signal\BreakHooks;
 			});
+	}
+	
+	/**
+	 * Setup NickServ authentication at the end of the MOTD
+	 */
+	
+	private function setupNickservAuthentication()
+	{
+		try {
+			$password = $this->config->nickservPassword;
+		}
+		catch ( \OutOfBoundsException $e ) {
+			// if nickserv pw is not set, gtfo
+			return;
+		}
+		
+		$this->client->bind(
+			Opcode::OP_MOTD_END,
+			function($irc) use ($password) {
+				if ( $irc->identity['nick'] !== $this->config->nick ) {
+					// nick conflict - ghost that fucker
+					$irc->privmsg('NickServ', "IDENTIFY {$this->config->nick} $password");
+					$irc->privmsg('NickServ', "GHOST {$this->config->nick} $password");
+					
+					// change our nick once the other instance has been ghosted
+					$irc->bind(
+						'NOTICE',
+						function ($irc, $msg) {
+							if ( strtolower($msg['identity']['nick']) === 'nickserv' &&
+								 stristr($msg['body'], 'ghosted')
+							) {
+								$irc->set_nick($this->config->nick);
+								throw new Signal\Unhook;
+							}
+						}
+					);
+					
+					return;
+				}
+				$irc->privmsg('NickServ', "IDENTIFY $password");
+			}
+		);
 	}
 	
 	/**

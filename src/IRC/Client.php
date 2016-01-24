@@ -22,6 +22,7 @@
 namespace DannyTheNinja\IRC;
 
 use DannyTheNinja\Utility\UUID;
+use DannyTheNinja\Utility\RNG;
 
 /**
  * Generic IRC client library.
@@ -29,6 +30,8 @@ use DannyTheNinja\Utility\UUID;
 
 class Client
 {
+	private $rng;
+	
 	private $socket;
 	private $hooks = [];
 	private $identity;
@@ -43,6 +46,16 @@ class Client
 	const RE_FRAG_HOSTNAME = '(?:(?:[a-z0-9-]+\.)*(?:[a-z0-9-]+)|(?:[0-9a-z:]+))';
 	const RE_FRAG_NICK = '[\w\|_-]+';
 	const RE_FRAG_USERNAME = '~?[\w_-]+';
+	
+	/**
+	 * Constructor - only used for dependency injection
+	 * @param DannyTheNinja\Utility\RNG;
+	 */
+	
+	public function __construct(RNG $rng = null)
+	{
+		$this->rng = $rng ?: new RNG;
+	}
 	
 	/**
 	 * Get overloader. Allows outside functions to pull protected variables, but not write them.
@@ -245,6 +258,21 @@ class Client
 				}
 				unset($chan);
 			});
+		
+		// nick conflict
+		$this->bind(
+			Opcode::OP_NICK_IN_USE,
+			function ($irc, $msg) {
+				$suffix = substr(
+							preg_replace('/[^A-Za-z0-9]+/', '', base64_encode($this->rng->randomBytes(32))),
+							0,
+							6
+							);
+				$oldnick = $this->identity['nick'];
+				$this->set_nick($newnick = "{$oldnick}_{$suffix}");
+				$this->identity['nick'] = $newnick;
+			}
+		);
 	}
 	
 	/**
